@@ -15,6 +15,7 @@ public:
     WorldROSItem(const WorldROSItem& org);
     virtual ~WorldROSItem();
     void setMaxClockPublishingRate(double rate);
+    double getMaxClockPublishingRate();
 
 protected:
     virtual Item* doDuplicate() const override;
