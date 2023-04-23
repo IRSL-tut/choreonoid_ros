@@ -57,8 +57,22 @@ public:
     
     double controlTime() const { return controlTime_; }
     
-    void setModuleName(const std::string& name);
-
+    void setNameSpace(const std::string& _nm)
+    {
+        name_space = _nm;
+    }
+    const std::string &getNameSpace()
+    {
+        return name_space;
+    }
+    void setJointStateUpdateRate(double _rate)
+    {
+        jointStateUpdateRate = _rate;
+    }
+    double getJointStateUpdateRate()
+    {
+        return jointStateUpdateRate;
+    }
 protected:
     virtual Item* doDuplicate() const override;
     virtual bool store(Archive& archive) override;
@@ -86,7 +100,7 @@ private:
     double controlTime_;
     std::ostream& os;
 
-    std::string bodyName;
+    std::string name_space;
 
     std::unique_ptr<ros::NodeHandle> rosNode;
  
