@@ -12,5 +12,5 @@ rules:  # Array of rules
 ## irsl_patch
   - base: devel
     upstream: choreonoid:master
-    mergeMethod: merge
+    mergeMethod: rebase
 ### [TODO] add stable
