@@ -72,6 +72,7 @@ bool BodyROSItem::store(Archive& archive)
     archive.write("body_ros_version", 0);
     archive.write("joint_state_publication", jointStatePublication);
     archive.write("joint_state_update_rate", jointStateUpdateRate);
+    archive.write("name_space", name_space);
 
     return true;
 }
@@ -81,6 +82,7 @@ bool BodyROSItem::restore(const Archive& archive)
 {
     archive.read({ "joint_state_publication", "jointStatePublication" }, jointStatePublication);
     archive.read({ "joint_state_update_rate", "jointStateUpdateRate" }, jointStateUpdateRate);
+    archive.read({ "name_space", "name space", "nameSpace" }, name_space);
 
     return true;
 }
@@ -90,6 +92,7 @@ void BodyROSItem::doPutProperties(PutPropertyFunction& putProperty)
 {
     putProperty("JointState Publication", jointStatePublication, changeProperty(jointStatePublication));
     putProperty.decimals(2).min(0.0)("JointState Update rate", jointStateUpdateRate, changeProperty(jointStateUpdateRate));
+    putProperty(_("Name space"), name_space, changeProperty(name_space));
 }
 
 
