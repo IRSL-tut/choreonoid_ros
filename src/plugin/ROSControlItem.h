@@ -34,6 +34,15 @@ public:
     virtual void output() override;
     virtual void stop() override;
 
+    void setNameSpace(const std::string &_nm)
+    {
+      nodeNamespace = _nm;
+    }
+    const std::string &getNameSpace()
+    {
+      return nodeNamespace;
+    }
+
 protected:
     virtual Item* doDuplicate() const;
     virtual bool store(Archive& archive) override;

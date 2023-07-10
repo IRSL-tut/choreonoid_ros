@@ -165,6 +165,10 @@ void WorldROSItem::setMaxClockPublishingRate(double rate)
     impl->initializeClockPublisher();
 }
 
+double WorldROSItem::getMaxClockPublishingRate()
+{
+    return impl->maxClockPublishingRate;
+}
 
 void WorldROSItem::Impl::clearWorld()
 {

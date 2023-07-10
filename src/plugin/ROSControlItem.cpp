@@ -59,7 +59,7 @@ bool ROSControlItem::store(Archive& archive)
 
 bool ROSControlItem::restore(const Archive& archive)
 {
-    if(!archive.read({ "name_space", "name space" }, nodeNamespace)){
+    if(!archive.read({ "name_space", "name space", "nameSpace" }, nodeNamespace)){
         nodeNamespace.clear();
     }
     return true;
