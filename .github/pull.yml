@@ -3,14 +3,14 @@ rules:  # Array of rules
   - base: master   # Required. Target branch
     upstream: choreonoid:master    # Required. Must be in the same fork network.
     mergeMethod: hardreset  # Optional, one of [none, merge, squash, rebase, hardreset], Default: none.
-#  - base: master_irsl
-#    upstream: choreonoid_ros:master
-#    mergeMethod: merge
-#  - base: stable_irsl
-#    upstream: IRSL-tut:stable
-#    mergeMethod: merge
-## irsl_patch
+  - base: stable
+    upstream: IRSL-tut:stable_base
+    mergeMethod: rebase
   - base: devel
     upstream: choreonoid:master
     mergeMethod: rebase
-### [TODO] add stable
+#IRSL-tut/choreonoid_ros
+#  master <=: choreonoid/master
+#  stable_base <=:  choreonoid/master at July14
+#  stable <=: stable + irsl_patch(some patch may be sent as PR)
+#  devel <=: master + irsl_patch
