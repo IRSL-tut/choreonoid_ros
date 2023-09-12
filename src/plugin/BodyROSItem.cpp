@@ -610,15 +610,15 @@ void BodyROSItem::updateRangeVisionSensorPointCloud
     range.fields[0].name = "x";
     range.fields[0].offset = 0;
     range.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
-    range.fields[0].count = 4;
+    range.fields[0].count = 1;
     range.fields[1].name = "y";
     range.fields[1].offset = 4;
     range.fields[1].datatype = sensor_msgs::PointField::FLOAT32;
-    range.fields[1].count = 4;
+    range.fields[1].count = 1;
     range.fields[2].name = "z";
     range.fields[2].offset = 8;
     range.fields[2].datatype = sensor_msgs::PointField::FLOAT32;
-    range.fields[2].count = 4;
+    range.fields[2].count = 1;
     const std::vector<Vector3f>& points = sensor->constPoints();
     const unsigned char* pixels = sensor->constImage().pixels();
     range.data.resize(points.size() * range.point_step);
@@ -767,15 +767,15 @@ void BodyROSItem::update3DRangeSensor
     range.fields[0].name = "x";
     range.fields[0].offset = 0;
     range.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
-    range.fields[0].count = 4;
+    range.fields[0].count = 1;
     range.fields[1].name = "y";
     range.fields[1].offset = 4;
     range.fields[1].datatype = sensor_msgs::PointField::FLOAT32;
-    range.fields[1].count = 4;
+    range.fields[1].count = 1;
     range.fields[2].name = "z";
     range.fields[2].offset = 8;
     range.fields[2].datatype = sensor_msgs::PointField::FLOAT32;
-    range.fields[2].count = 4;
+    range.fields[2].count = 1;
 
     range.data.resize(numPitchSamples * numYawSamples * range.point_step);
     unsigned char* dst = (unsigned char*)&(range.data[0]);
