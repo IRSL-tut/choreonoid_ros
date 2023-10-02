@@ -655,7 +655,7 @@ void BodyROSItem::updateRangeVisionSensorDepthImage
     vision.header.frame_id = sensor->name();
     vision.height = sensor->resolutionY();
     vision.width = sensor->resolutionX();
-    vision.encoding = sensor_msgs::image_encodings::MONO16;
+    vision.encoding = sensor_msgs::image_encodings::TYPE_16UC1;
 
     vision.is_bigendian = 0;
     vision.step = sensor->resolutionX() * sizeof(uint16_t);
