@@ -13,9 +13,11 @@
 #include <pluginlib/class_loader.h>
 #include <boost/shared_ptr.hpp>
 
+#include "exportdecl.h"
+
 namespace cnoid {
 
-class ROSControlItem : public ControllerItem
+class CNOID_EXPORT ROSControlItem : public ControllerItem
 {
 public:
     static void initializeClass(ExtensionManager* ext);
