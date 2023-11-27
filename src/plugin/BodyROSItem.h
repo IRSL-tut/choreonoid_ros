@@ -76,13 +76,13 @@ public:
     {
         return jointStateUpdateRate;
     }
-    void setPublishJointState(bool _on)
+    void setJointStatePublication(bool _on)
     {
-        publishJointState = _on;
+        jointStatePublication = _on;
     }
-    bool getPublishJointState() const
+    bool getJointStatePublication() const
     {
-        return publishJointState;
+        return jointStatePublication;
     }
 protected:
     virtual Item* doDuplicate() const override;
