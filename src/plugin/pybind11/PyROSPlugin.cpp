@@ -40,9 +40,9 @@ PYBIND11_MODULE(ROSPlugin, m)
         .def(py::init<>())
         .def_property_readonly("controlTime", &BodyROSItem::controlTime)
         .def_property("nameSpace", &BodyROSItem::getNameSpace, &BodyROSItem::setNameSpace)
-        .def_property("publishJointState",
-                      &BodyROSItem::getPublishJointState,
-                      &BodyROSItem::setPublishJointState)
+        .def_property("jointStatePublication",
+                      &BodyROSItem::getJointStatePublication,
+                      &BodyROSItem::setJointStatePublication)
         .def_property("jointStateUpdateRate",
                       &BodyROSItem::getJointStateUpdateRate,
                       &BodyROSItem::setJointStateUpdateRate)
