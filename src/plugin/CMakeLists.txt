@@ -22,6 +22,10 @@ target_link_libraries(${target}
   Choreonoid::CnoidBodyPlugin
   )
 
+if ( ${CHOREONOID_VERSION_STRING} VERSION_LESS "2.3.0" )
+  add_definitions(-DUSE_OLD_FORMAT)
+endif()
+
 option(USE_POINTCLOUD1_IN_BODY_ROS_ITEM "Use the PointCloud type instead of PointCoud2 for publishing range sensor data" OFF)
 mark_as_advanced(USE_POINTCLOUD1_IN_BODY_ROS_ITEM)
 

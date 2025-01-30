@@ -27,7 +27,12 @@ typedef sensor_msgs::PointCloud2 PointCloudTypeForRangeSensor;
 #include "gettext.h"
 
 using namespace cnoid;
+#ifdef USE_OLD_FORMAT
 using fmt::format;
+#else
+#include <cnoid/Format>
+#define format(...) cnoid::formatR(__VA_ARGS__)
+#endif
 
 
 void BodyROSItem::initializeClass(ExtensionManager* ext)

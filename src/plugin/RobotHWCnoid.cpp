@@ -18,7 +18,12 @@
 
 using namespace std;
 using namespace cnoid;
+#ifdef USE_OLD_FORMAT
 using fmt::format;
+#else
+#include <cnoid/Format>
+#define format(...) cnoid::formatR(__VA_ARGS__)
+#endif
 
 
 namespace hardware_interface {

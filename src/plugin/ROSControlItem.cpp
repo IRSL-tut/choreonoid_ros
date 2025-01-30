@@ -13,7 +13,12 @@
 using namespace std;
 using namespace cnoid;
 using namespace hardware_interface;
+#ifdef USE_OLD_FORMAT
 using fmt::format;
+#else
+#include <cnoid/Format>
+#define format(...) cnoid::formatR(__VA_ARGS__)
+#endif
 
 
 void ROSControlItem::initializeClass(ExtensionManager* ext)
