@@ -18,8 +18,13 @@ if(DEFINED ENV{ROS_VERSION})
       exportdecl.h
     )
 
+
     choreonoid_make_gettext_mo_files(${target} mofiles)
     choreonoid_add_plugin(${target} ${sources} ${mofiles} HEADERS ${headers})
+
+    if ( ${CHOREONOID_VERSION_STRING} VERSION_LESS "2.3.0" )
+      add_definitions(-DUSE_OLD_FORMAT)
+    endif()
 
     target_link_libraries(${target}
       PUBLIC
