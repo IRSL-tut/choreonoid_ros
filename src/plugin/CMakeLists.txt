@@ -23,10 +23,6 @@ if(DEFINED ENV{ROS_VERSION})
 
     target_link_libraries(${target}
       PUBLIC
-      ${roscpp_LIBRARIES}
-      ${std_msgs_LIBRARIES}
-      ${sensor_msgs_LIBRARIES}
-      ${image_transport_LIBRARIES}
       ${catkin_LIBRARIES}
       Choreonoid::CnoidBodyPlugin
     )
