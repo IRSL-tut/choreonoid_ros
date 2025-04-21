@@ -1,22 +1,14 @@
 #ifndef CNOID_ROS_PLUGIN_ROS2_CONTROL_ITEM_H
 #define CNOID_ROS_PLUGIN_ROS2_CONTROL_ITEM_H
 
-#include "SystemInterfaceCnoid.h"
-
 #include <cnoid/ControllerItem>
-
 #include <controller_manager/controller_manager.hpp>
 #include <rclcpp/rclcpp.hpp>
-
-
-#include<chrono>
-#include <memory>
 
 namespace cnoid {
 
 class ROS2ControlItem : public ControllerItem
 {
-
 public:
     static void initializeClass(ExtensionManager* ext);
 
@@ -39,20 +31,19 @@ protected:
     virtual void doPutProperties(PutPropertyFunction& putProperty) override;
 
 private:
-    ControllerIO* io = nullptr;
+    ControllerIO* io;
     rclcpp::Time now;
-    std::shared_ptr<rclcpp::Duration> period = nullptr;
+    std::shared_ptr<rclcpp::Duration> period;
     std::shared_ptr<rclcpp::Duration> controlPeriod;
 
-    std::shared_ptr<rclcpp::Node> node = nullptr;
+    std::shared_ptr<rclcpp::Node> node;
     std::shared_ptr<controller_manager::ControllerManager> controllerManager;
-    std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor = nullptr;
+    std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor;
     std::thread executorThread;
 
-    std::string nodeNamespace = "";
-    const std::string robotDescription = "robot_description";
-    std::string robotStatePublisherName = "robot_state_publisher";
+    std::string nodeNamespace;
 
+    void finalize();
     std::string getURDF() const;
 };
 

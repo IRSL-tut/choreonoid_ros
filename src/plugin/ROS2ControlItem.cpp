@@ -1,23 +1,16 @@
 #include "ROS2ControlItem.h"
-
-#include <cnoid/Archive>
+#include "SystemInterfaceCnoid.h"
+#include "Format.h"
 #include <cnoid/ItemManager>
 #include <cnoid/MessageView>
 #include <cnoid/PutPropertyFunction>
-#include "Format.h"
-#include "gettext.h"
-
-#include <controller_manager/controller_manager.hpp>
+#include <cnoid/Archive>
 #include <hardware_interface/component_parser.hpp>
 #include <hardware_interface/resource_manager.hpp>
-#include <hardware_interface/types/hardware_interface_type_values.hpp>
-#include <rclcpp/rclcpp.hpp>
-
-#include <memory>
+#include "gettext.h"
 
 using namespace std;
 using namespace cnoid;
-using fmt::format;
 
 
 void ROS2ControlItem::initializeClass(ExtensionManager* ext)
@@ -30,23 +23,20 @@ void ROS2ControlItem::initializeClass(ExtensionManager* ext)
 
 ROS2ControlItem::ROS2ControlItem()
 {
-
+    io = nullptr;
 }
 
 
 ROS2ControlItem::ROS2ControlItem(const ROS2ControlItem& org)
     : ControllerItem(org)
 {
-
+    io = nullptr;
 }
 
 
 ROS2ControlItem::~ROS2ControlItem()
 {
-    if (controllerManager) {
-        executor->remove_node(controllerManager);
-        executor->cancel();
-    }
+    finalize();
 }
 
 
@@ -102,63 +92,74 @@ bool ROS2ControlItem::initialize(ControllerIO* io)
     // copy controller interface into the private member
     this->io = io;
 
-    if (!nodeNamespace.empty()) {
-        robotStatePublisherName = nodeNamespace + "/" + robotStatePublisherName;
-    }
-
+    // create an executor and a executor thread
+    executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
+    executorThread = std::thread([this](){ executor->spin(); });
 
     // create ros2_control node
     const std::string nodeName = "choreonoid_ros2_control";
     node = rclcpp::Node::make_shared(nodeName, nodeNamespace);
-    
-    // create an executor and a executor thread
-    executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
+    node->set_parameter(rclcpp::Parameter("use_sim_time", true));
     executor->add_node(node);
-    executorThread = std::thread([this](){ executor->spin(); });
-
+    
     // get urdf from the robot state publisher
     const std::string urdfString = getURDF();
 
     // construct hardwareInfo from the URDF data
-    std::vector<hardware_interface::HardwareInfo> controlHardwareInfo;
+    std::vector<hardware_interface::HardwareInfo> hardwareInfos;
     try {
-        controlHardwareInfo = hardware_interface::parse_control_resources_from_urdf(urdfString);
+        hardwareInfos = hardware_interface::parse_control_resources_from_urdf(urdfString);
     } catch (const std::runtime_error& error) {
         mv->putln(
             formatR(_("Failed to parse the robot URDF: {}"), error.what()),
             MessageView::Error);
+        finalize();
+        return false;
+    }
+    HardwareInfo& hardwareInfo = hardwareInfos.front();
+    hardwareInfo.type = "system";
+
+#if !defined(ROS_DISTRO_HUMBLE)
+    hardwareInfo.hardware_plugin_name = "choreonoid_ros2_control/SystemInterfaceCnoid";
+#endif
+
+    // initialize ResourceManager
+    std::unique_ptr<hardware_interface::ResourceManager> resourceManager;
+
+    try {
+#if defined(ROS_DISTRO_HUMBLE)
+        resourceManager = std::make_unique<hardware_interface::ResourceManager>();
+        resourceManager->load_urdf(urdfString, false, false);
+#else
+        resourceManager = std::make_unique<hardware_interface::ResourceManager>(
+            urdfString, node->get_node_clock_interface(), node->get_node_logging_interface());
+#endif
+    } catch (...) {
+        mv->putln(formatR(_("Failed to initialize ResourceManager")), MessageView::Error);
+        finalize();
         return false;
     }
 
-    // initialize ResourceManager
-    std::unique_ptr<hardware_interface::ResourceManager> resourceManager = std::make_unique<hardware_interface::ResourceManager>();
-    try {
-        resourceManager->load_urdf(urdfString, false, false);
-    } catch (...) {
-        mv->putln(formatR(_("Failed to initialize ResourceManager")), MessageView::Error);
-    }
-
     // initialize SystemInterfaceCnoid
-    std::unique_ptr<SystemInterfaceCnoid> interface(new SystemInterfaceCnoid(io, node));
-    resourceManager->import_component(std::move(interface), controlHardwareInfo[0]);
+    auto interface = make_unique<SystemInterfaceCnoid>(io, node);
+    resourceManager->import_component(std::move(interface), hardwareInfo);
     
     // activate the corresponding HardwareComponent
     rclcpp_lifecycle::State state(
         lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE,
         hardware_interface::lifecycle_state_names::ACTIVE);
-    resourceManager->set_component_state(controlHardwareInfo[0].name, state);
+    resourceManager->set_component_state(hardwareInfo.name, state);
 
     // create controller manager
     mv->putln(formatR(_("Creating ControllerManager")));
-    const std::string controllerManagerName = "controller_manager";
     controllerManager.reset(
         new controller_manager::ControllerManager(
             std::move(resourceManager),
             executor,
-            controllerManagerName,
+            "controller_manager",
             nodeNamespace));
-    executor->add_node(controllerManager);
 
+    controllerManager->set_parameter(rclcpp::Parameter("use_sim_time", true));
     const int updateRate = controllerManager->get_parameter("update_rate").as_int();
     if (updateRate < 0.1) {
         mv->putln(
@@ -170,10 +171,8 @@ bool ROS2ControlItem::initialize(ControllerIO* io)
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::duration<double>(1.0 / static_cast<double>(updateRate)))));
 
-    // set "use_sim_time" parameter to the controller manager
-    controllerManager->set_parameter(
-        rclcpp::Parameter("use_sim_time", rclcpp::ParameterValue(true)));
-
+    executor->add_node(controllerManager);
+    
     mv->putln(formatR(_("{} has successfully been initialized"), displayName()));
 
     return true;
@@ -231,8 +230,32 @@ void ROS2ControlItem::stop()
 }
 
 
+void ROS2ControlItem::finalize()
+{
+    if (executor) {
+        executor->cancel();
+        executorThread.join();
+        if(node){
+            executor->remove_node(node);
+        }
+        if(controllerManager){
+            executor->remove_node(controllerManager);
+        }
+        executor.reset();
+    }
+}
+
+
 std::string ROS2ControlItem::getURDF() const
 {
+    string robotStatePublisherName;
+    if (nodeNamespace.empty()) {
+        robotStatePublisherName = "robot_state_publisher";
+    } else {
+        robotStatePublisherName = formatC("{0}/robot_state_publisher", nodeNamespace);
+    }
+    string parameterName = "robot_description";
+    
     std::string urdfString;
     auto mv = MessageView::instance();
 
@@ -240,20 +263,19 @@ std::string ROS2ControlItem::getURDF() const
     auto client = std::make_shared<rclcpp::AsyncParametersClient>(
         node, robotStatePublisherName);
 
-    mv->putln(formatR(_("Try to connect to {} ..."), robotStatePublisherName.data()));
+    mv->putln(formatR(_("Try to connect to {} ..."), robotStatePublisherName));
 
     while (!client->wait_for_service(0.1s)) {}
 
-    mv->putln(formatR(_("Connected to {}"), robotStatePublisherName.data()));
+    mv->putln(formatR(_("Connected to {}"), robotStatePublisherName));
 
     // search and wait for robot_description parameter
     mv->putln(
         formatR(_("Try to get URDF parameter {} from {} ..."),
-                robotDescription.data(),
-                robotStatePublisherName.data()));
+                parameterName, robotStatePublisherName));
 
     try {
-        auto f = client->get_parameters({robotDescription});
+        auto f = client->get_parameters({parameterName});
         f.wait();
         std::vector<rclcpp::Parameter> values = f.get();
         urdfString = values[0].as_string();
@@ -266,12 +288,11 @@ std::string ROS2ControlItem::getURDF() const
     if (urdfString.empty()) {
         mv->putln(
             formatR(_("Parameter {} of {} is empty"),
-                    robotDescription.data(),
-                    robotStatePublisherName.data()),
+                    parameterName, robotStatePublisherName),
             MessageView::Error);
     }
 
-    mv->putln(formatR(_("Received URDF parameter from {}"), robotStatePublisherName.data()));
+    mv->putln(formatR(_("Received URDF parameter from {}"), robotStatePublisherName));
 
     return urdfString;
 }

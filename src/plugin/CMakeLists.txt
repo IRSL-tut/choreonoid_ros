@@ -52,19 +52,16 @@ if(DEFINED ENV{ROS_VERSION})
   elseif($ENV{ROS_VERSION} EQUAL 2)
     set(target CnoidROS2Plugin)
 
+    if($ENV{ROS_DISTRO} STREQUAL "humble")
+      add_definitions(-DROS_DISTRO_HUMBLE)
+    endif()
+
     set(sources
       ROS2Plugin.cpp
       WorldROS2Item.cpp
       BodyROS2Item.cpp
       ROS2ControlItem.cpp
       SystemInterfaceCnoid.cpp
-      ${mofiles}
-    )
-
-    set(headers
-      WorldROS2Item.h
-      BodyROS2Item.h
-      exportdecl.h
     )
 
     choreonoid_make_gettext_mo_files(${target} mofiles)
