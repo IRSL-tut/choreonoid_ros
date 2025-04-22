@@ -40,7 +40,6 @@ private:
     std::shared_ptr<controller_manager::ControllerManager> controllerManager;
     std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> executor;
     std::thread executorThread;
-
     std::string nodeNamespace;
 
     void finalize();

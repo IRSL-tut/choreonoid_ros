@@ -68,18 +68,14 @@ if(DEFINED ENV{ROS_VERSION})
     choreonoid_add_plugin(${target} ${sources} ${mofiles} HEADERS ${headers})
 
     ament_target_dependencies(${target} PUBLIC
-      "rclcpp"
-      "std_msgs"
-      "std_srvs"
-      "sensor_msgs"
-      "image_transport"
-      "hardware_interface"
-      "controller_manager"
-    )
+      rclcpp std_msgs std_srvs sensor_msgs image_transport hardware_interface controller_manager)
+    target_link_libraries(${target} PUBLIC Choreonoid::CnoidBodyPlugin)
 
-    target_link_libraries(${target} PUBLIC
-      Choreonoid::CnoidBodyPlugin
-    )
+    # ros2_control haredware interface component
+    add_library(choreonoid_ros2_control SHARED SystemInterfaceCnoid.cpp)
+    ament_target_dependencies(choreonoid_ros2_control hardware_interface pluginlib rclcpp rclcpp_lifecycle)
+    target_link_libraries(choreonoid_ros2_control Choreonoid::CnoidBody)
+    install(TARGETS choreonoid_ros2_control LIBRARY DESTINATION lib)
 
   endif()
 endif()

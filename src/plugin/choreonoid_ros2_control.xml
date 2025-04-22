@@ -1,0 +1,9 @@
+<library path="choreonoid_ros2_control">
+  <class name="choreonoid_ros2_control/SystemInterfaceCnoid"
+	 type="cnoid::SystemInterfaceCnoid"
+	 base_class_type="hardware_interface::SystemInterface">
+    <description>
+      System interface component for controlling a virtual robot on Choreonoid with ros2_control controllers.
+    </description>
+  </class>
+</library>

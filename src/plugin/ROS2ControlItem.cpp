@@ -1,5 +1,4 @@
 #include "ROS2ControlItem.h"
-#include "SystemInterfaceCnoid.h"
 #include "Format.h"
 #include <cnoid/ItemManager>
 #include <cnoid/MessageView>
@@ -117,12 +116,7 @@ bool ROS2ControlItem::initialize(ControllerIO* io)
         finalize();
         return false;
     }
-    HardwareInfo& hardwareInfo = hardwareInfos.front();
-    hardwareInfo.type = "system";
-
-#if !defined(ROS_DISTRO_HUMBLE)
-    hardwareInfo.hardware_plugin_name = "choreonoid_ros2_control/SystemInterfaceCnoid";
-#endif
+    hardware_interface::HardwareInfo& hardwareInfo = hardwareInfos.front();
 
     // initialize ResourceManager
     std::unique_ptr<hardware_interface::ResourceManager> resourceManager;
@@ -141,10 +135,6 @@ bool ROS2ControlItem::initialize(ControllerIO* io)
         return false;
     }
 
-    // initialize SystemInterfaceCnoid
-    auto interface = make_unique<SystemInterfaceCnoid>(io, node);
-    resourceManager->import_component(std::move(interface), hardwareInfo);
-    
     // activate the corresponding HardwareComponent
     rclcpp_lifecycle::State state(
         lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE,

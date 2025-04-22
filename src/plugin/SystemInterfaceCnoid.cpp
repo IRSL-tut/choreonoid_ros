@@ -1,29 +1,36 @@
 #include "SystemInterfaceCnoid.h"
-
+#include "Format.h"
 #include <cnoid/Body>
 #include <cnoid/Link>
-#include <cnoid/MessageView>
-#include "Format.h"
+#include <cnoid/MessageOut>
+#include <hardware_interface/types/hardware_interface_type_values.hpp>
+#include <pluginlib/class_list_macros.hpp>
 #include "gettext.h"
 
-#include <hardware_interface/types/hardware_interface_type_values.hpp>
+using namespace cnoid;
+using namespace hardware_interface;
 
-namespace cnoid {
 
-SystemInterfaceCnoid::SystemInterfaceCnoid(){
+SystemInterfaceCnoid::SystemInterfaceCnoid()
+{
+    controllerIo = nullptr;
 }
 
 
-SystemInterfaceCnoid::SystemInterfaceCnoid(cnoid::ControllerIO* io_arg, std::shared_ptr<rclcpp::Node> node_arg)
+SystemInterfaceCnoid::SystemInterfaceCnoid(cnoid::ControllerIO* io, std::shared_ptr<rclcpp::Node> node_)
 {
-    io = io_arg;
-    node = node_arg;
+    controllerIo = io;
+    node = node_;
 }
 
 
-CallbackReturn SystemInterfaceCnoid::on_init(const HardwareInfo& info)
+hardware_interface::CallbackReturn SystemInterfaceCnoid::on_init(const hardware_interface::HardwareInfo& info)
 {
-    auto mv = MessageView::instance();
+    if(!controllerIo){
+        return CallbackReturn::ERROR;
+    }
+        
+    auto mout = MessageOut::master();
 
     // copy the HardwareInfo as `info_ = hardware_info;`
     if (SystemInterface::on_init(info) != CallbackReturn::SUCCESS) {
@@ -43,9 +50,8 @@ CallbackReturn SystemInterfaceCnoid::on_init(const HardwareInfo& info)
 
         // set control types from robot description
         if (joint.command_interfaces.size() != 1) {
-            mv->putln(
-                formatR(_("joint {} must have one command interface"), jointName),
-                MessageView::Error);
+            mout->putErrorln(
+                formatR(_("joint {} must have one command interface"), jointName));
             return CallbackReturn::ERROR;
         }
 
@@ -61,14 +67,13 @@ CallbackReturn SystemInterfaceCnoid::on_init(const HardwareInfo& info)
         } else if (controlTypeString == "velocity_pd") {
             controlTypes[i] = ControlMode::VELOCITY_PD;
         } else {
-            mv->putln(
-                formatR(_("the command interface of joint {} is invalid"), jointName),
-                MessageView::Error);
+            mout->putErrorln(
+                formatR(_("the command interface of joint {} is invalid"), jointName));
             return CallbackReturn::ERROR;
         }
 
-        mv->putln(formatR(_("{}:"), jointName));
-        mv->putln(formatR(_("\tcontrol type: {}"), controlTypeString));
+        mout->putln(formatR(_("{}:"), jointName));
+        mout->putln(formatR(_("\tcontrol type: {}"), controlTypeString));
 
         // if controlTypes[i] is POSITION, VELOCITY, or EFFORT, skip gain settings
         if (controlTypes[i] <= ControlMode::EFFORT) {
@@ -84,11 +89,11 @@ CallbackReturn SystemInterfaceCnoid::on_init(const HardwareInfo& info)
             try {
                 node->declare_parameter<double>(paramName, 0.0);
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException& e) {
-                mv->putln(formatR(_("{}"), e.what()), MessageView::Error);
+                mout->putErrorln(formatR(_("{}"), e.what()));
             } catch (rclcpp::exceptions::InvalidParameterValueException& e) {
-                mv->putln(formatR(_("{}"), e.what()), MessageView::Error);
+                mout->putErrorln(formatR(_("{}"), e.what()));
             } catch (rclcpp::exceptions::InvalidParameterTypeException& e) {
-                mv->putln(formatR(_("{}"), e.what()), MessageView::Error);
+                mout->putErrorln(formatR(_("{}"), e.what()));
             }
         };
 
@@ -101,13 +106,13 @@ CallbackReturn SystemInterfaceCnoid::on_init(const HardwareInfo& info)
                 return node->get_parameter(paramName).as_double();
             } catch (rclcpp::exceptions::ParameterNotDeclaredException& e) {
                 // this error occurs if the above declaration failed
-                // mv->putln(formatR(_("{}"), e.what()), MessageView::Error);
+                // mout->putErrorln(formatR(_("{}"), e.what()));
                 return 0.0;
             } catch (rclcpp::exceptions::InvalidParameterValueException& e) {
-                mv->putln(formatR(_("{}"), e.what()), MessageView::Error);
+                mout->putErrorln(formatR(_("{}"), e.what()));
                 return 0.0;
             } catch (rclcpp::exceptions::InvalidParameterTypeException& e) {
-                mv->putln(formatR(_("{}"), e.what()), MessageView::Error);
+                mout->putErrorln(formatR(_("{}"), e.what()));
                 return 0.0;
             }
         };
@@ -115,13 +120,13 @@ CallbackReturn SystemInterfaceCnoid::on_init(const HardwareInfo& info)
         gains[i].p = getParam(paramNameP);
         gains[i].d = getParam(paramNameD);
 
-        mv->putln(formatR(_("\tP gain: {}"), gains[i].p));
+        mout->putln(formatR(_("\tP gain: {}"), gains[i].p));
         if (gains[i].p <= 0.0) {
-            mv->putln(formatR(_("\tP gain should be positive")), MessageView::Warning);
+            mout->putWarningln(formatR(_("\tP gain should be positive")));
         }
-        mv->putln(formatR(_("\tD gain: {}"), gains[i].d));
+        mout->putln(formatR(_("\tD gain: {}"), gains[i].d));
         if (gains[i].d < 0.0) {
-            mv->putln(formatR(_("\tP gain must be non-negative")), MessageView::Error);
+            mout->putErrorln(formatR(_("\tP gain must be non-negative")));
         }
     }
 
@@ -154,7 +159,7 @@ std::vector<StateInterface> SystemInterfaceCnoid::export_state_interfaces()
 }
 
 
-std::vector<CommandInterface> SystemInterfaceCnoid::export_command_interfaces()
+std::vector<hardware_interface::CommandInterface> SystemInterfaceCnoid::export_command_interfaces()
 {
     std::vector<CommandInterface> commandInterfaces;
     commandInterfaces.reserve(info_.joints.size());
@@ -185,16 +190,13 @@ std::vector<CommandInterface> SystemInterfaceCnoid::export_command_interfaces()
 }
 
 
-CallbackReturn SystemInterfaceCnoid::on_activate(
-    const rclcpp_lifecycle::State& previous_state)
+hardware_interface::CallbackReturn SystemInterfaceCnoid::on_activate(const rclcpp_lifecycle::State& previous_state)
 {
     for (int i = 0; i < info_.joints.size(); ++i) {
-        Link* joint = io->body()->joint(info_.joints[i].name);
+        Link* joint = controllerIo->body()->joint(info_.joints[i].name);
         if (!joint) {
-            auto mv = MessageView::instance();
-            mv->putln(
-                formatR(_("joint {} is not found in the simulation body"), info_.joints[i].name),
-                MessageView::Error);
+            MessageOut::master()->putErrorln(
+                formatR(_("joint {} is not found in the simulation body"), info_.joints[i].name));
             return CallbackReturn::ERROR;
         }
 
@@ -233,19 +235,17 @@ CallbackReturn SystemInterfaceCnoid::on_activate(
 }
 
 
-CallbackReturn SystemInterfaceCnoid::on_deactivate(
-    const rclcpp_lifecycle::State& previous_state)
+hardware_interface::CallbackReturn SystemInterfaceCnoid::on_deactivate(const rclcpp_lifecycle::State& previous_state)
 {
     return CallbackReturn::SUCCESS;
 }
 
 
-return_type SystemInterfaceCnoid::read(
-    const rclcpp::Time& time, const rclcpp::Duration& period)
+hardware_interface::return_type SystemInterfaceCnoid::read(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
     // copy joint states from the simulation body
     for (int i = 0; i < info_.joints.size(); ++i) {
-        const Link* joint = io->body()->joint(info_.joints[i].name);
+        const Link* joint = controllerIo->body()->joint(info_.joints[i].name);
 
         states[i].position = joint->q();
         states[i].velocity = joint->dq();
@@ -256,14 +256,13 @@ return_type SystemInterfaceCnoid::read(
 }
 
 
-return_type SystemInterfaceCnoid::write(
-    const rclcpp::Time& time, const rclcpp::Duration& period)
+hardware_interface::return_type SystemInterfaceCnoid::write(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
     // TODO: enforces joint limits
 
     // copy control commands to the simulation body
     for (int i = 0; i < info_.joints.size(); ++i) {
-        Link* joint = io->body()->joint(info_.joints[i].name);
+        Link* joint = controllerIo->body()->joint(info_.joints[i].name);
 
         switch (controlTypes[i]) {
             case ControlMode::POSITION:
@@ -290,4 +289,4 @@ return_type SystemInterfaceCnoid::write(
     return return_type::OK;
 }
 
-}  // namespace cnoid
+PLUGINLIB_EXPORT_CLASS(cnoid::SystemInterfaceCnoid, hardware_interface::SystemInterface)
