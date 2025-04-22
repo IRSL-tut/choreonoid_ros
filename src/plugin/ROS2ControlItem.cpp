@@ -5,6 +5,7 @@
 #include <cnoid/MessageView>
 #include <cnoid/PutPropertyFunction>
 #include <cnoid/Archive>
+#include <cnoid/MessageOut>
 #include <hardware_interface/component_parser.hpp>
 #include <hardware_interface/resource_manager.hpp>
 #include "gettext.h"
@@ -152,14 +153,17 @@ bool ROS2ControlItem::initialize(ControllerIO* io)
 
     // create controller manager
     mv->putln(formatR(_("Creating ControllerManager")));
-    controllerManager.reset(
-        new controller_manager::ControllerManager(
-            std::move(resourceManager),
-            executor,
-            "controller_manager",
-            nodeNamespace));
 
-    controllerManager->set_parameter(rclcpp::Parameter("use_sim_time", true));
+    auto options = controller_manager::get_cm_node_options();
+    options.parameter_overrides().emplace_back("use_sim_time", true);
+    
+    controllerManager = std::make_shared<controller_manager::ControllerManager>(
+        std::move(resourceManager),
+        executor,
+        "controller_manager",
+        nodeNamespace,
+        options);
+
     const int updateRate = controllerManager->get_parameter("update_rate").as_int();
     if (updateRate < 0.1) {
         mv->putln(
@@ -208,11 +212,16 @@ void ROS2ControlItem::input()
 
 
 bool ROS2ControlItem::control()
-{  
+{
     // update control commands
     // TODO: apply update_rate param of controllerManager
-    controllerManager->update(now, *period);
-
+    try {
+        controllerManager->update(now, *period);
+    }
+    catch(const std::runtime_error& error){
+        io->mout()->putErrorln(error.what());
+        return false;
+    }
     return true;
 }
 
