@@ -1,4 +1,4 @@
-#include "SystemInterfaceCnoid.h"
+#include "BodySystemInterface.h"
 #include "Format.h"
 #include <cnoid/Body>
 #include <cnoid/Link>
@@ -11,20 +11,20 @@ using namespace cnoid;
 using namespace hardware_interface;
 
 
-SystemInterfaceCnoid::SystemInterfaceCnoid()
+BodySystemInterface::BodySystemInterface()
 {
     controllerIo = nullptr;
 }
 
 
-SystemInterfaceCnoid::SystemInterfaceCnoid(cnoid::ControllerIO* io, std::shared_ptr<rclcpp::Node> node_)
+BodySystemInterface::BodySystemInterface(cnoid::ControllerIO* io, std::shared_ptr<rclcpp::Node> node_)
 {
     controllerIo = io;
     node = node_;
 }
 
 
-hardware_interface::CallbackReturn SystemInterfaceCnoid::on_init(const hardware_interface::HardwareInfo& info)
+hardware_interface::CallbackReturn BodySystemInterface::on_init(const hardware_interface::HardwareInfo& info)
 {
     if(!controllerIo){
         return CallbackReturn::ERROR;
@@ -45,7 +45,7 @@ hardware_interface::CallbackReturn SystemInterfaceCnoid::on_init(const hardware_
     gains.resize(numJoints, {0.0, 0.0});
 
     for (int i = 0; i < info_.joints.size(); ++i) {
-        ComponentInfo joint = info_.joints[i];
+        const ComponentInfo& joint = info_.joints[i];
         const std::string jointName = joint.name;
 
         // set control types from robot description
@@ -101,7 +101,7 @@ hardware_interface::CallbackReturn SystemInterfaceCnoid::on_init(const hardware_
         declareParam(paramNameD);
 
         // get gain parameters
-        auto getParam = [&](const std::string paramName) -> double {
+        auto getParam = [&](const std::string& paramName) -> double {
             try {
                 return node->get_parameter(paramName).as_double();
             } catch (rclcpp::exceptions::ParameterNotDeclaredException& e) {
@@ -134,19 +134,19 @@ hardware_interface::CallbackReturn SystemInterfaceCnoid::on_init(const hardware_
 }
 
 
-CallbackReturn SystemInterfaceCnoid::on_configure(
+CallbackReturn BodySystemInterface::on_configure(
     const rclcpp_lifecycle::State& previous_state)
 {
     return CallbackReturn::SUCCESS;
 }
 
 
-std::vector<StateInterface> SystemInterfaceCnoid::export_state_interfaces()
+std::vector<StateInterface> BodySystemInterface::export_state_interfaces()
 {
     std::vector<StateInterface> stateInterfaces;
     stateInterfaces.reserve(3 * info_.joints.size());
     for (int i = 0; i < info_.joints.size(); ++i) {
-        const std::string jointName = info_.joints[i].name;
+        const std::string& jointName = info_.joints[i].name;
         stateInterfaces.emplace_back(StateInterface(
         jointName, hardware_interface::HW_IF_POSITION, &states[i].position));
         stateInterfaces.emplace_back(StateInterface(
@@ -159,7 +159,7 @@ std::vector<StateInterface> SystemInterfaceCnoid::export_state_interfaces()
 }
 
 
-std::vector<hardware_interface::CommandInterface> SystemInterfaceCnoid::export_command_interfaces()
+std::vector<hardware_interface::CommandInterface> BodySystemInterface::export_command_interfaces()
 {
     std::vector<CommandInterface> commandInterfaces;
     commandInterfaces.reserve(info_.joints.size());
@@ -190,7 +190,7 @@ std::vector<hardware_interface::CommandInterface> SystemInterfaceCnoid::export_c
 }
 
 
-hardware_interface::CallbackReturn SystemInterfaceCnoid::on_activate(const rclcpp_lifecycle::State& previous_state)
+hardware_interface::CallbackReturn BodySystemInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
 {
     for (int i = 0; i < info_.joints.size(); ++i) {
         Link* joint = controllerIo->body()->joint(info_.joints[i].name);
@@ -235,13 +235,13 @@ hardware_interface::CallbackReturn SystemInterfaceCnoid::on_activate(const rclcp
 }
 
 
-hardware_interface::CallbackReturn SystemInterfaceCnoid::on_deactivate(const rclcpp_lifecycle::State& previous_state)
+hardware_interface::CallbackReturn BodySystemInterface::on_deactivate(const rclcpp_lifecycle::State& previous_state)
 {
     return CallbackReturn::SUCCESS;
 }
 
 
-hardware_interface::return_type SystemInterfaceCnoid::read(const rclcpp::Time& time, const rclcpp::Duration& period)
+hardware_interface::return_type BodySystemInterface::read(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
     // copy joint states from the simulation body
     for (int i = 0; i < info_.joints.size(); ++i) {
@@ -256,7 +256,7 @@ hardware_interface::return_type SystemInterfaceCnoid::read(const rclcpp::Time& t
 }
 
 
-hardware_interface::return_type SystemInterfaceCnoid::write(const rclcpp::Time& time, const rclcpp::Duration& period)
+hardware_interface::return_type BodySystemInterface::write(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
     // TODO: enforces joint limits
 
@@ -289,4 +289,4 @@ hardware_interface::return_type SystemInterfaceCnoid::write(const rclcpp::Time& 
     return return_type::OK;
 }
 
-PLUGINLIB_EXPORT_CLASS(cnoid::SystemInterfaceCnoid, hardware_interface::SystemInterface)
+PLUGINLIB_EXPORT_CLASS(cnoid::BodySystemInterface, hardware_interface::SystemInterface)

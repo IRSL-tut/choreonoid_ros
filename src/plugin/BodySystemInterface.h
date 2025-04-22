@@ -1,5 +1,5 @@
-#ifndef SYSTEM_INTERFACE_CNOID_H
-#define SYSTEM_INTERFACE_CNOID_H
+#ifndef CNOID_ROS_PLUGIN_BODY_SYSTEM_INTERFACE_H
+#define CNOID_ROS_PLUGIN_BODY_SYSTEM_INTERFACE_H
 
 #include <cnoid/ControllerIO>
 #include <hardware_interface/handle.hpp>
@@ -10,13 +10,13 @@
 
 namespace cnoid {
 
-class SystemInterfaceCnoid : public hardware_interface::SystemInterface
+class BodySystemInterface : public hardware_interface::SystemInterface
 {
 public:
-    RCLCPP_SHARED_PTR_DEFINITIONS(SystemInterfaceCnoid);
+    RCLCPP_SHARED_PTR_DEFINITIONS(BodySystemInterface);
 
-    SystemInterfaceCnoid();
-    SystemInterfaceCnoid(cnoid::ControllerIO* io, std::shared_ptr<rclcpp::Node> node);
+    BodySystemInterface();
+    BodySystemInterface(cnoid::ControllerIO* io, std::shared_ptr<rclcpp::Node> node);
 
     virtual hardware_interface::CallbackReturn on_init(const hardware_interface::HardwareInfo& info) override;
     virtual hardware_interface::CallbackReturn on_configure( const rclcpp_lifecycle::State& previous_state) override;
