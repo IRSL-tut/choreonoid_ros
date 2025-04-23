@@ -7,6 +7,7 @@
 #include <cnoid/MessageOut>
 #include <hardware_interface/component_parser.hpp>
 #include <hardware_interface/resource_manager.hpp>
+#include <hardware_interface/system_interface.hpp>
 #include "gettext.h"
 
 using namespace std;
@@ -159,17 +160,19 @@ std::unique_ptr<hardware_interface::ResourceManager> ROS2ControlItem::createReso
     } catch (const std::runtime_error& error) {
         io->mout()->putErrorln(formatR(_("Failed to parse the robot URDF: {}"), error.what()));
         finalize();
-        return false;
+        return nullptr;
     }
     if(hardwareInfos.empty()){
         io->mout()->putErrorln(_("ros2_control information is not found in the robot URDF."));
         finalize();
-        return false;
+        return nullptr;
     }
     auto& hardwareInfo = hardwareInfos.front();
     
     auto resourceManager = std::make_unique<hardware_interface::ResourceManager>();
-    auto bodySystem = std::make_unique<BodySystemInterface>(io, node);
+    resourceManager->load_urdf(urdfString, false, false);
+    
+    auto bodySystem = std::make_unique<BodySystemInterface>(node, io);
     resourceManager->import_component(std::move(bodySystem), hardwareInfo);
 
     // activate the corresponding HardwareComponent
