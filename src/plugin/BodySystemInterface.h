@@ -16,7 +16,7 @@ public:
     RCLCPP_SHARED_PTR_DEFINITIONS(BodySystemInterface);
 
     BodySystemInterface();
-    BodySystemInterface(cnoid::ControllerIO* io, std::shared_ptr<rclcpp::Node> node);
+    BodySystemInterface(std::shared_ptr<rclcpp::Node> node, cnoid::ControllerIO* io);
 
     virtual hardware_interface::CallbackReturn on_init(const hardware_interface::HardwareInfo& info) override;
     virtual hardware_interface::CallbackReturn on_configure( const rclcpp_lifecycle::State& previous_state) override;
@@ -55,8 +55,8 @@ private:
         UNDEFINED
     };
 
-    cnoid::ControllerIO* controllerIo;
     std::shared_ptr<rclcpp::Node> node;
+    cnoid::ControllerIO* io;
     std::vector<State> states;
     std::vector<double> commands;
     std::vector<ControlMode> controlTypes;

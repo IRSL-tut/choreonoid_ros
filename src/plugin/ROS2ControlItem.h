@@ -42,6 +42,7 @@ private:
     std::thread executorThread;
     std::string nodeNamespace;
 
+    std::unique_ptr<hardware_interface::ResourceManager> createResourceManager();
     void finalize();
     std::string getURDF() const;
 };

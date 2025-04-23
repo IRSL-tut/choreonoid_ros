@@ -13,20 +13,21 @@ using namespace hardware_interface;
 
 BodySystemInterface::BodySystemInterface()
 {
-    controllerIo = nullptr;
+    io = nullptr;
 }
 
 
-BodySystemInterface::BodySystemInterface(cnoid::ControllerIO* io, std::shared_ptr<rclcpp::Node> node_)
+BodySystemInterface::BodySystemInterface(std::shared_ptr<rclcpp::Node> node, cnoid::ControllerIO* io)
+    : node(node),
+      io(io)
 {
-    controllerIo = io;
-    node = node_;
+
 }
 
 
 hardware_interface::CallbackReturn BodySystemInterface::on_init(const hardware_interface::HardwareInfo& info)
 {
-    if(!controllerIo){
+    if(!io){
         return CallbackReturn::ERROR;
     }
         
@@ -193,7 +194,7 @@ std::vector<hardware_interface::CommandInterface> BodySystemInterface::export_co
 hardware_interface::CallbackReturn BodySystemInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
 {
     for (int i = 0; i < info_.joints.size(); ++i) {
-        Link* joint = controllerIo->body()->joint(info_.joints[i].name);
+        Link* joint = io->body()->joint(info_.joints[i].name);
         if (!joint) {
             MessageOut::master()->putErrorln(
                 formatR(_("joint {} is not found in the simulation body"), info_.joints[i].name));
@@ -245,7 +246,7 @@ hardware_interface::return_type BodySystemInterface::read(const rclcpp::Time& ti
 {
     // copy joint states from the simulation body
     for (int i = 0; i < info_.joints.size(); ++i) {
-        const Link* joint = controllerIo->body()->joint(info_.joints[i].name);
+        const Link* joint = io->body()->joint(info_.joints[i].name);
 
         states[i].position = joint->q();
         states[i].velocity = joint->dq();
@@ -262,7 +263,7 @@ hardware_interface::return_type BodySystemInterface::write(const rclcpp::Time& t
 
     // copy control commands to the simulation body
     for (int i = 0; i < info_.joints.size(); ++i) {
-        Link* joint = controllerIo->body()->joint(info_.joints[i].name);
+        Link* joint = io->body()->joint(info_.joints[i].name);
 
         switch (controlTypes[i]) {
             case ControlMode::POSITION:
