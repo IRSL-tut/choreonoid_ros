@@ -10,13 +10,15 @@
 
 namespace cnoid {
 
+class ROS2ControlItem;
+
 class BodySystemInterface : public hardware_interface::SystemInterface
 {
 public:
     RCLCPP_SHARED_PTR_DEFINITIONS(BodySystemInterface);
 
     BodySystemInterface();
-    BodySystemInterface(std::shared_ptr<rclcpp::Node> node, cnoid::ControllerIO* io);
+    BodySystemInterface(ROS2ControlItem* item);
 
     virtual hardware_interface::CallbackReturn on_init(const hardware_interface::HardwareInfo& info) override;
     virtual hardware_interface::CallbackReturn on_configure( const rclcpp_lifecycle::State& previous_state) override;
@@ -55,6 +57,7 @@ private:
         UNDEFINED
     };
 
+    ROS2ControlItem* item;
     std::shared_ptr<rclcpp::Node> node;
     cnoid::ControllerIO* io;
     std::vector<State> states;

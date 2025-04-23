@@ -1,10 +1,11 @@
 #include "BodySystemInterface.h"
+#include "ROS2ControlItem.h"
 #include "Format.h"
 #include <cnoid/Body>
 #include <cnoid/Link>
 #include <cnoid/MessageOut>
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
-#include <pluginlib/class_list_macros.hpp>
+//#include <pluginlib/class_list_macros.hpp>
 #include "gettext.h"
 
 using namespace cnoid;
@@ -13,13 +14,12 @@ using namespace hardware_interface;
 
 BodySystemInterface::BodySystemInterface()
 {
-    io = nullptr;
+    item = nullptr;
 }
 
 
-BodySystemInterface::BodySystemInterface(std::shared_ptr<rclcpp::Node> node, cnoid::ControllerIO* io)
-    : node(node),
-      io(io)
+BodySystemInterface::BodySystemInterface(ROS2ControlItem* item)
+    : item(item)
 {
 
 }
@@ -27,7 +27,7 @@ BodySystemInterface::BodySystemInterface(std::shared_ptr<rclcpp::Node> node, cno
 
 hardware_interface::CallbackReturn BodySystemInterface::on_init(const hardware_interface::HardwareInfo& info)
 {
-    if(!io){
+    if(!item){
         return CallbackReturn::ERROR;
     }
         
@@ -88,7 +88,7 @@ hardware_interface::CallbackReturn BodySystemInterface::on_init(const hardware_i
 
         auto declareParam = [&](const std::string paramName) {
             try {
-                node->declare_parameter<double>(paramName, 0.0);
+                item->node()->declare_parameter<double>(paramName, 0.0);
             } catch (const rclcpp::exceptions::ParameterAlreadyDeclaredException& e) {
                 mout->putErrorln(formatR(_("{}"), e.what()));
             } catch (rclcpp::exceptions::InvalidParameterValueException& e) {
@@ -104,7 +104,7 @@ hardware_interface::CallbackReturn BodySystemInterface::on_init(const hardware_i
         // get gain parameters
         auto getParam = [&](const std::string& paramName) -> double {
             try {
-                return node->get_parameter(paramName).as_double();
+                return item->node()->get_parameter(paramName).as_double();
             } catch (rclcpp::exceptions::ParameterNotDeclaredException& e) {
                 // this error occurs if the above declaration failed
                 // mout->putErrorln(formatR(_("{}"), e.what()));
@@ -193,8 +193,10 @@ std::vector<hardware_interface::CommandInterface> BodySystemInterface::export_co
 
 hardware_interface::CallbackReturn BodySystemInterface::on_activate(const rclcpp_lifecycle::State& previous_state)
 {
+    auto body = item->bodyItem()->body();
+    
     for (int i = 0; i < info_.joints.size(); ++i) {
-        Link* joint = io->body()->joint(info_.joints[i].name);
+        Link* joint = body->joint(info_.joints[i].name);
         if (!joint) {
             MessageOut::master()->putErrorln(
                 formatR(_("joint {} is not found in the simulation body"), info_.joints[i].name));
@@ -244,9 +246,11 @@ hardware_interface::CallbackReturn BodySystemInterface::on_deactivate(const rclc
 
 hardware_interface::return_type BodySystemInterface::read(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
+    auto ioBody = item->io()->body();
+    
     // copy joint states from the simulation body
     for (int i = 0; i < info_.joints.size(); ++i) {
-        const Link* joint = io->body()->joint(info_.joints[i].name);
+        const Link* joint = ioBody->joint(info_.joints[i].name);
 
         states[i].position = joint->q();
         states[i].velocity = joint->dq();
@@ -259,11 +263,13 @@ hardware_interface::return_type BodySystemInterface::read(const rclcpp::Time& ti
 
 hardware_interface::return_type BodySystemInterface::write(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
+    auto ioBody = item->io()->body();
+
     // TODO: enforces joint limits
 
     // copy control commands to the simulation body
     for (int i = 0; i < info_.joints.size(); ++i) {
-        Link* joint = io->body()->joint(info_.joints[i].name);
+        Link* joint = ioBody->joint(info_.joints[i].name);
 
         switch (controlTypes[i]) {
             case ControlMode::POSITION:
@@ -290,4 +296,4 @@ hardware_interface::return_type BodySystemInterface::write(const rclcpp::Time& t
     return return_type::OK;
 }
 
-PLUGINLIB_EXPORT_CLASS(cnoid::BodySystemInterface, hardware_interface::SystemInterface)
+//PLUGINLIB_EXPORT_CLASS(cnoid::BodySystemInterface, hardware_interface::SystemInterface)

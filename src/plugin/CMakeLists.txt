@@ -72,10 +72,10 @@ if(DEFINED ENV{ROS_VERSION})
     target_link_libraries(${target} PUBLIC Choreonoid::CnoidBodyPlugin)
 
     # ros2_control haredware component
-    add_library(choreonoid_ros2_control SHARED BodySystemInterface.cpp)
-    ament_target_dependencies(choreonoid_ros2_control hardware_interface pluginlib rclcpp rclcpp_lifecycle)
-    target_link_libraries(choreonoid_ros2_control Choreonoid::CnoidBody)
-    install(TARGETS choreonoid_ros2_control LIBRARY DESTINATION lib)
+    # add_library(choreonoid_ros2_control SHARED BodySystemInterface.cpp)
+    # ament_target_dependencies(choreonoid_ros2_control hardware_interface pluginlib rclcpp rclcpp_lifecycle)
+    # target_link_libraries(choreonoid_ros2_control Choreonoid::CnoidBody)
+    # install(TARGETS choreonoid_ros2_control LIBRARY DESTINATION lib)
 
   endif()
 endif()

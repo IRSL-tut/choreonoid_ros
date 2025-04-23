@@ -19,11 +19,10 @@ namespace {
 class ResourceManagerEx : public hardware_interface::ResourceManager
 {
 public:
-    ResourceManagerEx(std::shared_ptr<rclcpp::Node> node, ControllerIO* io);
+    ResourceManagerEx(ROS2ControlItem* item);
     virtual bool load_and_initialize_components(const std::string& urdf, unsigned int update_rate) override;
 private:
-    std::shared_ptr<rclcpp::Node> node;
-    ControllerIO* io;
+    ROS2ControlItem* item;
 };
 #endif
 
@@ -40,14 +39,18 @@ void ROS2ControlItem::initializeClass(ExtensionManager* ext)
 
 ROS2ControlItem::ROS2ControlItem()
 {
-    io = nullptr;
+    bodyItem_ = nullptr;
+    isConfiguread = false;
+    io_ = nullptr;
 }
 
 
 ROS2ControlItem::ROS2ControlItem(const ROS2ControlItem& org)
     : ControllerItem(org)
 {
-    io = nullptr;
+    bodyItem_ = nullptr;
+    isConfiguread = false;
+    io_ = nullptr;
 }
 
 
@@ -63,64 +66,45 @@ Item* ROS2ControlItem::doDuplicate() const
 }
 
 
-bool ROS2ControlItem::store(Archive& archive)
+void ROS2ControlItem::onTargetBodyItemChanged(BodyItem* bodyItem)
 {
-    if(!nodeNamespace.empty()){
-        archive.write("namespace", nodeNamespace);
-    }
-    return true;
-}
-
-bool ROS2ControlItem::restore(const Archive& archive)
-{
-    if(!archive.read({"namespace"}, nodeNamespace)){
-        nodeNamespace.clear();
-    }
-    return true;
-}
-
-
-void ROS2ControlItem::doPutProperties(PutPropertyFunction& putProperty)
-{
-    putProperty(_("Namespace"), nodeNamespace, changeProperty(nodeNamespace));
-}
-
-
-bool ROS2ControlItem::initialize(ControllerIO* io)
-{
-    this->io = io;
+    bodyItem_ = bodyItem;
+    isConfiguread = false;
     
-    // check if Choreonoid is executed as a ROS 2 node
-    if (!rclcpp::ok()) {
-        io->mout()->putErrorln(formatR(_("Choreonoid is not executed as a ROS 2 node")));
-    }
-
-    // check the body
-    if (!io->body()){
-        io->mout()->putErrorln(
-            formatR(_("ROS2ControlItem \"{}\" is invalid because it is not assigned to a body"),
+    auto mout = MessageOut::master();
+    
+    if(!bodyItem){
+        mout->putErrorln(
+            formatR(_("{0} must be a child item of a robot item to be configured."),
                     displayName()));
-        return false;
+        finalize();
+        return;
     }
-
-    // create an executor and a executor thread
+        
+    if (!rclcpp::ok()) {
+        mout->putErrorln(
+            formatR(_("{0} cannot be configured because Choreonoid is not executed with choreonoid_ros."),
+                    displayName()));
+        return;
+    }
+    
     executor = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
     executorThread = std::thread([this](){ executor->spin(); });
-
-    // create ros2_control node
-    const std::string nodeName = "choreonoid_ros2_control";
-    node = rclcpp::Node::make_shared(nodeName, nodeNamespace);
-    node->set_parameter(rclcpp::Parameter("use_sim_time", true));
-    executor->add_node(node);
-
-    auto resourceManager = createResourceManager();
     
-    // create controller manager
-    io->mout()->putln(formatR(_("Creating ControllerManager")));
-
+    const std::string nodeName = "choreonoid_ros2_control";
+    node_ = rclcpp::Node::make_shared(nodeName, nodeNamespace);
+    node_->set_parameter(rclcpp::Parameter("use_sim_time", true));
+    executor->add_node(node_);
+    
+    auto resourceManager = createResourceManager();
+    if(!resourceManager){
+        mout->putErrorln(formatR(_("{0} cannot be configured."), displayName()));
+        finalize();
+        return;
+    }
+            
     auto options = controller_manager::get_cm_node_options();
     options.parameter_overrides().emplace_back("use_sim_time", true);
-    
     controllerManager = std::make_shared<controller_manager::ControllerManager>(
         std::move(resourceManager),
         executor,
@@ -130,25 +114,24 @@ bool ROS2ControlItem::initialize(ControllerIO* io)
 
     const int updateRate = controllerManager->get_parameter("update_rate").as_int();
     if (updateRate < 0.1) {
-        io->mout()->putErrorln(
-            formatR(_("ROS2ControlItem {} gets an invalid update rate: {}. It should be >= 0.1"),
-                    displayName(), updateRate));
+        mout->putErrorln(
+            formatR(_("Invalid update rate {0} is specified for {1}. The rate should be >= 0.1"),
+                    updateRate, displayName()));
     }
     controlPeriod.reset(new rclcpp::Duration(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::duration<double>(1.0 / static_cast<double>(updateRate)))));
 
     executor->add_node(controllerManager);
-    
-    io->mout()->putln(formatR(_("{} has successfully been initialized"), displayName()));
 
-    return true;
+    isConfiguread = true;
 }
+
 
 std::unique_ptr<hardware_interface::ResourceManager> ROS2ControlItem::createResourceManager()
 {
 #ifndef ROS_DISTRO_HUMBLE
-    return std::make_unique<ResourceManagerEx>(node, io);
+    return std::make_unique<ResourceManagerEx>(this);
 #else
     // get urdf from the robot state publisher
     const std::string urdfString = getURDF();
@@ -158,12 +141,12 @@ std::unique_ptr<hardware_interface::ResourceManager> ROS2ControlItem::createReso
     try {
         hardwareInfos = hardware_interface::parse_control_resources_from_urdf(urdfString);
     } catch (const std::runtime_error& error) {
-        io->mout()->putErrorln(formatR(_("Failed to parse the robot URDF: {}"), error.what()));
+        MessageOut::master()->putErrorln(formatR(_("Failed to parse the robot URDF: {}"), error.what()));
         finalize();
         return nullptr;
     }
     if(hardwareInfos.empty()){
-        io->mout()->putErrorln(_("ros2_control information is not found in the robot URDF."));
+        MessageOut::master()->putErrorln(_("ros2_control information is not found in the robot URDF."));
         finalize();
         return nullptr;
     }
@@ -172,7 +155,7 @@ std::unique_ptr<hardware_interface::ResourceManager> ROS2ControlItem::createReso
     auto resourceManager = std::make_unique<hardware_interface::ResourceManager>();
     resourceManager->load_urdf(urdfString, false, false);
     
-    auto bodySystem = std::make_unique<BodySystemInterface>(node, io);
+    auto bodySystem = std::make_unique<BodySystemInterface>(this);
     resourceManager->import_component(std::move(bodySystem), hardwareInfo);
 
     // activate the corresponding HardwareComponent
@@ -186,10 +169,72 @@ std::unique_ptr<hardware_interface::ResourceManager> ROS2ControlItem::createReso
 }
 
 
+std::string ROS2ControlItem::getURDF() const
+{
+    auto mout = MessageOut::master();
+    
+    string robotStatePublisherName;
+    if (nodeNamespace.empty()) {
+        robotStatePublisherName = "robot_state_publisher";
+    } else {
+        robotStatePublisherName = formatC("{0}/robot_state_publisher", nodeNamespace);
+    }
+    string parameterName = "robot_description";
+    
+    using namespace std::chrono_literals;
+    auto client = std::make_shared<rclcpp::AsyncParametersClient>(
+        node_, robotStatePublisherName);
+
+    mout->putln(formatR(_("Try to connect to {} ..."), robotStatePublisherName));
+
+    while (!client->wait_for_service(0.1s)) {}
+
+    mout->putln(formatR(_("Connected to {}"), robotStatePublisherName));
+
+    // search and wait for robot_description parameter
+    mout->putln(
+        formatR(_("Try to get URDF parameter {} from {} ..."),
+                parameterName, robotStatePublisherName));
+
+    std::string urdfString;
+    try {
+        auto f = client->get_parameters({parameterName});
+        f.wait();
+        std::vector<rclcpp::Parameter> values = f.get();
+        urdfString = values[0].as_string();
+    } catch (const std::exception& error) {
+        mout->putErrorln(
+            formatR(_("Failed to get the URDF parameter: {}"), error.what()));
+    }
+
+    if (urdfString.empty()) {
+        mout->putErrorln(
+            formatR(_("Parameter {} of {} is empty"),
+                    parameterName, robotStatePublisherName));
+    }
+
+    mout->putln(formatR(_("Received URDF parameter from {}"), robotStatePublisherName));
+
+    return urdfString;
+}
+
+
+bool ROS2ControlItem::initialize(ControllerIO* io)
+{
+    if(!isConfiguread){
+        io->mout()->putErrorln(formatR(_("{0} is not correctly configured."), displayName()));
+        return false;
+    }
+    
+    io_ = io;
+    return true;
+}
+
+
 bool ROS2ControlItem::start()
 {
     // set time step
-    const double timeStep = io->timeStep();
+    const double timeStep = io_->timeStep();
     const int timeStepSec = static_cast<int>(timeStep);
     const int timeStepNsec = static_cast<int>(timeStep * 1e9);
 
@@ -202,27 +247,25 @@ bool ROS2ControlItem::start()
 void ROS2ControlItem::input()
 {
     // get current time
-    const double currentTime = io->currentTime();
+    const double currentTime = io_->currentTime();
     const int nowSec = static_cast<int>(currentTime);
     const int nowNsec = static_cast<int>((currentTime - nowSec) * 1e9);
 
     // RCL_ROS_TIME parameter is essential to use simulation time
     now = rclcpp::Time(nowSec, nowNsec, RCL_ROS_TIME);
 
-    // read joint states
     controllerManager->read(now, *period);
 }
 
 
 bool ROS2ControlItem::control()
 {
-    // update control commands
     // TODO: apply update_rate param of controllerManager
     try {
         controllerManager->update(now, *period);
     }
     catch(const std::runtime_error& error){
-        io->mout()->putErrorln(error.what());
+        io_->mout()->putErrorln(error.what());
         return false;
     }
     return true;
@@ -231,14 +274,13 @@ bool ROS2ControlItem::control()
 
 void ROS2ControlItem::output()
 {
-    // write commands into joints
     controllerManager->write(now, *period);
 }
 
 
 void ROS2ControlItem::stop()
 {
-
+    io_ = nullptr;
 }
 
 
@@ -247,71 +289,50 @@ void ROS2ControlItem::finalize()
     if (executor) {
         executor->cancel();
         executorThread.join();
-        if(node){
-            executor->remove_node(node);
-        }
         if(controllerManager){
             executor->remove_node(controllerManager);
+            controllerManager.reset();
+        }
+        if(node_){
+            executor->remove_node(node_);
+            node_.reset();
         }
         executor.reset();
     }
+    isConfiguread = false;
+    io_ = nullptr;
 }
 
 
-std::string ROS2ControlItem::getURDF() const
+void ROS2ControlItem::doPutProperties(PutPropertyFunction& putProperty)
 {
-    string robotStatePublisherName;
-    if (nodeNamespace.empty()) {
-        robotStatePublisherName = "robot_state_publisher";
-    } else {
-        robotStatePublisherName = formatC("{0}/robot_state_publisher", nodeNamespace);
+    putProperty(_("Namespace"), nodeNamespace, changeProperty(nodeNamespace));
+}
+
+
+bool ROS2ControlItem::store(Archive& archive)
+{
+    if(!nodeNamespace.empty()){
+        archive.write("namespace", nodeNamespace);
     }
-    string parameterName = "robot_description";
-    
-    using namespace std::chrono_literals;
-    auto client = std::make_shared<rclcpp::AsyncParametersClient>(
-        node, robotStatePublisherName);
+    return true;
+}
 
-    io->mout()->putln(formatR(_("Try to connect to {} ..."), robotStatePublisherName));
 
-    while (!client->wait_for_service(0.1s)) {}
-
-    io->mout()->putln(formatR(_("Connected to {}"), robotStatePublisherName));
-
-    // search and wait for robot_description parameter
-    io->mout()->putln(
-        formatR(_("Try to get URDF parameter {} from {} ..."),
-                parameterName, robotStatePublisherName));
-
-    std::string urdfString;
-    try {
-        auto f = client->get_parameters({parameterName});
-        f.wait();
-        std::vector<rclcpp::Parameter> values = f.get();
-        urdfString = values[0].as_string();
-    } catch (const std::exception& error) {
-        io->mout()->putErrorln(
-            formatR(_("Failed to get the URDF parameter: {}"), error.what()));
+bool ROS2ControlItem::restore(const Archive& archive)
+{
+    if(!archive.read({"namespace"}, nodeNamespace)){
+        nodeNamespace.clear();
     }
-
-    if (urdfString.empty()) {
-        io->mout()->putErrorln(
-            formatR(_("Parameter {} of {} is empty"),
-                    parameterName, robotStatePublisherName));
-    }
-
-    io->mout()->putln(formatR(_("Received URDF parameter from {}"), robotStatePublisherName));
-
-    return urdfString;
+    return true;
 }
 
 
 #ifndef ROS_DISTRO_HUMBLE
-ResourceManagerEx::ResourceManagerEx(std::shared_ptr<rclcpp::Node> node, ControllerIO* io)
+ResourceManagerEx::ResourceManagerEx(ROS2ControlItem* item)
     : hardware_interface::ResourceManager(
-        node->get_node_clock_interface(), node->get_node_logging_interface()),
-      node(node),
-      io(io)
+        item->node()->get_node_clock_interface(), item->node()->get_node_logging_interface()),
+      item(item)
 {
 
 }
@@ -324,7 +345,7 @@ bool ResourceManagerEx::load_and_initialize_components(const std::string& urdf, 
     for(auto& info : hardwareInfos){
         if(info.hardware_plugin_name == "choreonoid_ros2_control/BodySystemInterface" &&
            info.type == "system"){
-            auto bodySystem = std::make_unique<BodySystemInterface>(node, io);
+            auto bodySystem = std::make_unique<BodySystemInterface>(item);
             import_component(std::move(bodySystem), info);
             components_are_loaded_and_initialized_ = true;
             break;
