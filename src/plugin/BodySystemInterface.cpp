@@ -5,7 +5,6 @@
 #include <cnoid/Link>
 #include <cnoid/MessageOut>
 #include <hardware_interface/types/hardware_interface_type_values.hpp>
-//#include <pluginlib/class_list_macros.hpp>
 #include "gettext.h"
 
 using namespace cnoid;
@@ -295,5 +294,3 @@ hardware_interface::return_type BodySystemInterface::write(const rclcpp::Time& t
 
     return return_type::OK;
 }
-
-//PLUGINLIB_EXPORT_CLASS(cnoid::BodySystemInterface, hardware_interface::SystemInterface)

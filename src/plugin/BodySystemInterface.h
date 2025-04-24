@@ -68,4 +68,4 @@ private:
 
 }  // namespace cnoid
 
-#endif  // SYSTEM_INTERFACE_CNOID_H
+#endif
