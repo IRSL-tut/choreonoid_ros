@@ -44,13 +44,12 @@ private:
     bool isConfiguread;
 
     ControllerIO* io_;
-    rclcpp::Time now;
-    std::shared_ptr<rclcpp::Duration> period;
-    std::shared_ptr<rclcpp::Duration> controlPeriod;
+    rclcpp::Duration cmPeriod;
 
     std::unique_ptr<hardware_interface::ResourceManager> createResourceManager();
     void finalize();
     std::string getURDF() const;
+    rclcpp::Time getCurrentRosTime();
 };
 
 typedef ref_ptr<ROS2ControlItem> ROS2ControlItemPtr;

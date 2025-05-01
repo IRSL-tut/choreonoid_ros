@@ -38,6 +38,7 @@ void ROS2ControlItem::initializeClass(ExtensionManager* ext)
 
 
 ROS2ControlItem::ROS2ControlItem()
+    : cmPeriod(0, 0)
 {
     bodyItem_ = nullptr;
     isConfiguread = false;
@@ -46,7 +47,8 @@ ROS2ControlItem::ROS2ControlItem()
 
 
 ROS2ControlItem::ROS2ControlItem(const ROS2ControlItem& org)
-    : ControllerItem(org)
+    : ControllerItem(org),
+      cmPeriod(0, 0)
 {
     bodyItem_ = nullptr;
     isConfiguread = false;
@@ -118,9 +120,6 @@ void ROS2ControlItem::onTargetBodyItemChanged(BodyItem* bodyItem)
             formatR(_("Invalid update rate {0} is specified for {1}. The rate should be >= 0.1"),
                     updateRate, displayName()));
     }
-    controlPeriod.reset(new rclcpp::Duration(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::duration<double>(1.0 / static_cast<double>(updateRate)))));
 
     executor->add_node(controllerManager);
 
@@ -233,28 +232,23 @@ bool ROS2ControlItem::initialize(ControllerIO* io)
 
 bool ROS2ControlItem::start()
 {
-    // set time step
-    const double timeStep = io_->timeStep();
-    const int timeStepSec = static_cast<int>(timeStep);
-    const int timeStepNsec = static_cast<int>(timeStep * 1e9);
-
-    period.reset(new rclcpp::Duration(timeStepSec, timeStepNsec));
-
+    cmPeriod = rclcpp::Duration::from_seconds(io_->timeStep());
     return true;
+}
+
+
+rclcpp::Time ROS2ControlItem::getCurrentRosTime()
+{
+    double time = io_->currentTime();
+    int32_t sec = static_cast<int32_t>(time);
+    uint32_t nsec = static_cast<uint32_t>(std::round((time - sec) * 1e9));
+    return rclcpp::Time(sec, nsec, RCL_ROS_TIME);
 }
 
 
 void ROS2ControlItem::input()
 {
-    // get current time
-    const double currentTime = io_->currentTime();
-    const int nowSec = static_cast<int>(currentTime);
-    const int nowNsec = static_cast<int>((currentTime - nowSec) * 1e9);
-
-    // RCL_ROS_TIME parameter is essential to use simulation time
-    now = rclcpp::Time(nowSec, nowNsec, RCL_ROS_TIME);
-
-    controllerManager->read(now, *period);
+    controllerManager->read(getCurrentRosTime(), cmPeriod);
 }
 
 
@@ -262,7 +256,7 @@ bool ROS2ControlItem::control()
 {
     // TODO: apply update_rate param of controllerManager
     try {
-        controllerManager->update(now, *period);
+        controllerManager->update(getCurrentRosTime(), cmPeriod);
     }
     catch(const std::runtime_error& error){
         io_->mout()->putErrorln(error.what());
@@ -274,7 +268,7 @@ bool ROS2ControlItem::control()
 
 void ROS2ControlItem::output()
 {
-    controllerManager->write(now, *period);
+    controllerManager->write(getCurrentRosTime(), cmPeriod);
 }
 
 
