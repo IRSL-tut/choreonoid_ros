@@ -192,11 +192,13 @@ void WorldROS2Item::Impl::onSimulationStep()
     // Publish clock
     if (time >= nextClockPublishingTime) {
         rosgraph_msgs::msg::Clock clock;
-        clock.clock.set__sec(static_cast<int>(time));
-        int nanosec = (time - clock.clock.sec) * 10e6;
-        clock.clock.set__nanosec(nanosec);
+        clock.clock.sec = static_cast<int>(time);
+        clock.clock.nanosec = static_cast<uint32_t>(std::round((time - clock.clock.sec) * 1e9));
         clockPublisher->publish(clock);
         nextClockPublishingTime += clockPublishingInterval;
+        while (time >= nextClockPublishingTime) {
+            nextClockPublishingTime += clockPublishingInterval;
+        }
     }
 }
 
