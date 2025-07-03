@@ -7,7 +7,6 @@
 */
 
 #include "WorldROS2Item.h"
-#include "gettext.h"
 #include <cnoid/Archive>
 #include <cnoid/ConnectionSet>
 #include <cnoid/ItemManager>
@@ -17,6 +16,7 @@
 #include <cnoid/WorldItem>
 #include <rclcpp/rclcpp.hpp>
 #include <rosgraph_msgs/msg/clock.hpp>
+#include "gettext.h"
 
 using namespace std;
 using namespace cnoid;

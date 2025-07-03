@@ -1,9 +1,8 @@
-set(target CnoidROSPlugin)
-
-choreonoid_make_gettext_mo_files(${target} mofiles)
 
 if(DEFINED ENV{ROS_VERSION})
   if($ENV{ROS_VERSION} EQUAL 1)
+    set(target CnoidROSPlugin)
+
     set(sources
       ROSPlugin.cpp
       WorldROSItem.cpp
@@ -19,6 +18,7 @@ if(DEFINED ENV{ROS_VERSION})
       exportdecl.h
     )
 
+    choreonoid_make_gettext_mo_files(${target} mofiles)
     choreonoid_add_plugin(${target} ${sources} ${mofiles} HEADERS ${headers})
 
     target_link_libraries(${target}
@@ -52,7 +52,10 @@ if(DEFINED ENV{ROS_VERSION})
     if(CHOREONOID_ENABLE_PYTHON)
       add_subdirectory(pybind11)
     endif()
+
   elseif($ENV{ROS_VERSION} EQUAL 2)
+    set(target CnoidROS2Plugin)
+
     set(sources
       ROS2Plugin.cpp
       WorldROS2Item.cpp
@@ -65,6 +68,7 @@ if(DEFINED ENV{ROS_VERSION})
       exportdecl.h
     )
 
+    choreonoid_make_gettext_mo_files(${target} mofiles)
     choreonoid_add_plugin(${target} ${sources} ${mofiles} HEADERS ${headers})
 
     ament_target_dependencies(${target} PUBLIC
