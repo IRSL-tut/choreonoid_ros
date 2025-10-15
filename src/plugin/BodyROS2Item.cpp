@@ -594,39 +594,37 @@ void BodyROS2Item::updateRangeVisionSensor(
         return;
     }
 
+    const auto& image = sensor->constImage();
+    const unsigned char* pixels = nullptr;
+    const std::vector<Vector3f>& points = sensor->constPoints();
+
     auto pointCloud = std::make_shared<sensor_msgs::msg::PointCloud2>();
     pointCloud->header.stamp = getStampMsgFromSec(io->currentTime());
     pointCloud->header.frame_id = sensor->name();
-    pointCloud->width = sensor->resolutionX();
-    pointCloud->height = sensor->resolutionY();
+
+    if(image.empty()){
+        pointCloud->width = points.size();
+        pointCloud->height = 1;
+    } else {
+        pointCloud->width = image.width();
+        pointCloud->height = image.height();
+    }
+    pointCloud->is_dense = sensor->isDense();
     pointCloud->is_bigendian = false;
-    pointCloud->is_dense = true;
-    pointCloud->row_step = pointCloud->point_step * pointCloud->width;
-    if (sensor->imageType() == cnoid::Camera::COLOR_IMAGE) {
-        pointCloud->fields.resize(6);
+    
+    if(!image.empty() && sensor->imageType() == cnoid::Camera::COLOR_IMAGE) {
+        pointCloud->fields.resize(4);
         pointCloud->fields[3].name = "rgb";
         pointCloud->fields[3].offset = 12;
         pointCloud->fields[3].count = 1;
-        pointCloud->fields[3].datatype = sensor_msgs::msg::PointField::FLOAT32;
-        /*
-          pointCloud->fields[3].name = "r";
-          pointCloud->fields[3].offset = 12;
-          pointCloud->fields[3].datatype = sensor_msgs::PointField::UINT8;
-          pointCloud->fields[3].count = 1;
-          pointCloud->fields[4].name = "g";
-          pointCloud->fields[4].offset = 13;
-          pointCloud->fields[4].datatype = sensor_msgs::PointField::UINT8;
-          pointCloud->fields[4].count = 1;
-          pointCloud->fields[5].name = "b";
-          pointCloud->fields[5].offset = 14;
-          pointCloud->fields[5].datatype = sensor_msgs::PointField::UINT8;
-          pointCloud->fields[5].count = 1;
-        */
+        pointCloud->fields[3].datatype = sensor_msgs::msg::PointField::UINT32;
         pointCloud->point_step = 16;
+        pixels = image.pixels();
     } else {
         pointCloud->fields.resize(3);
         pointCloud->point_step = 12;
     }
+
     pointCloud->fields[0].name = "x";
     pointCloud->fields[0].offset = 0;
     pointCloud->fields[0].datatype = sensor_msgs::msg::PointField::FLOAT32;
@@ -639,10 +637,10 @@ void BodyROS2Item::updateRangeVisionSensor(
     pointCloud->fields[2].offset = 8;
     pointCloud->fields[2].datatype = sensor_msgs::msg::PointField::FLOAT32;
     pointCloud->fields[2].count = 4;
-    const std::vector<Vector3f> &points = sensor->constPoints();
-    const unsigned char *pixels = sensor->constImage().pixels();
+
+    pointCloud->row_step = pointCloud->point_step * pointCloud->width;
     pointCloud->data.resize(points.size() * pointCloud->point_step);
-    unsigned char *dst = (unsigned char *) &(pointCloud->data[0]);
+    unsigned char* dst = (unsigned char*) &(pointCloud->data[0]);
 
     std::optional<Matrix3f> Ro;
     if(!sensor->opticalFrameRotation().isIdentity()){
@@ -670,12 +668,15 @@ void BodyROS2Item::updateRangeVisionSensor(
         std::memcpy(&dst[0], &x, 4);
         std::memcpy(&dst[4], &y, 4);
         std::memcpy(&dst[8], &z, 4);
-        if (sensor->imageType() == cnoid::Camera::COLOR_IMAGE) {
-            dst[14] = *pixels++;
-            dst[13] = *pixels++;
-            dst[12] = *pixels++;
-            dst[15] = 0;
+
+        if(pixels){
+            uint8_t r = *pixels++;
+            uint8_t g = *pixels++;
+            uint8_t b = *pixels++;
+            uint32_t rgb = ((uint32_t)r << 16) | ((uint32_t)g << 8) | ((uint32_t)b);
+            std::memcpy(&dst[12], &rgb, 4);
         }
+
         dst += pointCloud->point_step;
     }
 
