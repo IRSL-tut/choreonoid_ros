@@ -137,6 +137,10 @@ void WorldROS2Item::Impl::initializeClockPublisher()
     clockPublisher.reset();
     if (rosNode && maxClockPublishingRate > 0.0) {
         clockPublisher = rosNode->create_publisher<rosgraph_msgs::msg::Clock>("/clock", 1);
+        // To publish with BEST_EFFORT QoS:
+        // auto qos = rclcpp::QoS(10);
+        // qos.best_effort();
+        // clockPublisher = rosNode->create_publisher<rosgraph_msgs::msg::Clock>("/clock", qos);
     }
 }
 
