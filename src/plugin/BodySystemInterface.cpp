@@ -24,8 +24,14 @@ BodySystemInterface::BodySystemInterface(ROS2ControlItem* item)
 }
 
 
+#ifndef ROS_DISTRO_HUMBLE
+hardware_interface::CallbackReturn BodySystemInterface::on_init(const hardware_interface::HardwareComponentInterfaceParams& params)
+{
+    const auto& info = params.hardware_info;
+#else
 hardware_interface::CallbackReturn BodySystemInterface::on_init(const hardware_interface::HardwareInfo& info)
 {
+#endif
     if(!item){
         return CallbackReturn::ERROR;
     }
@@ -33,7 +39,11 @@ hardware_interface::CallbackReturn BodySystemInterface::on_init(const hardware_i
     auto mout = MessageOut::master();
 
     // copy the HardwareInfo as `info_ = hardware_info;`
+#ifndef ROS_DISTRO_HUMBLE
+    if (SystemInterface::on_init(params) != CallbackReturn::SUCCESS) {
+#else
     if (SystemInterface::on_init(info) != CallbackReturn::SUCCESS) {
+#endif
         return CallbackReturn::ERROR;
     }
 

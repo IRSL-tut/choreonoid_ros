@@ -20,7 +20,11 @@ public:
     BodySystemInterface();
     BodySystemInterface(ROS2ControlItem* item);
 
+#ifndef ROS_DISTRO_HUMBLE
+    virtual hardware_interface::CallbackReturn on_init(const hardware_interface::HardwareComponentInterfaceParams& params) override;
+#else
     virtual hardware_interface::CallbackReturn on_init(const hardware_interface::HardwareInfo& info) override;
+#endif
     virtual hardware_interface::CallbackReturn on_configure( const rclcpp_lifecycle::State& previous_state) override;
     virtual std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
     virtual std::vector<hardware_interface::CommandInterface> export_command_interfaces() override;

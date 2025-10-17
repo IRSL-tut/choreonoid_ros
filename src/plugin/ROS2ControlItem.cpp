@@ -349,7 +349,11 @@ bool ResourceManagerEx::load_and_initialize_components(const std::string& urdf, 
         if(info.hardware_plugin_name == "choreonoid_ros2_control/BodySystemInterface" &&
            info.type == "system"){
             auto bodySystem = std::make_unique<BodySystemInterface>(item);
-            import_component(std::move(bodySystem), info);
+            hardware_interface::HardwareComponentParams params;
+            params.hardware_info = info;
+            params.logger = item->node()->get_logger();
+            params.clock = item->node()->get_clock();
+            import_component(std::move(bodySystem), params);
             components_are_loaded_and_initialized_ = true;
             break;
         }
