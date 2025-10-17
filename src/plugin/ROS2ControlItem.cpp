@@ -240,6 +240,15 @@ bool ROS2ControlItem::start()
 rclcpp::Time ROS2ControlItem::getCurrentRosTime()
 {
     double time = io_->currentTime();
+
+#ifndef ROS_DISTRO_HUMBLE    
+    // Avoid zero time to prevent controller_manager error in Jazzy
+    // when clock check fails at the first control cycle
+    if (time < 1e-9) {
+        time = 1e-9;  // 1 nanosecond
+    }
+#endif
+
     int32_t sec = static_cast<int32_t>(time);
     uint32_t nsec = static_cast<uint32_t>(std::round((time - sec) * 1e9));
     return rclcpp::Time(sec, nsec, RCL_ROS_TIME);
