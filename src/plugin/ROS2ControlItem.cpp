@@ -38,20 +38,30 @@ void ROS2ControlItem::initializeClass(ExtensionManager* ext)
 
 
 ROS2ControlItem::ROS2ControlItem()
-    : cmPeriod(0, 0)
+    : currentRosTime(0, 0, RCL_ROS_TIME),
+      cmPeriod(0, 0)
 {
     bodyItem_ = nullptr;
     isConfiguread = false;
+#ifndef ROS_DISTRO_HUMBLE
+    cmClockHandle = nullptr;
+    isClockOverrideEnabled = false;
+#endif
     io_ = nullptr;
 }
 
 
 ROS2ControlItem::ROS2ControlItem(const ROS2ControlItem& org)
     : ControllerItem(org),
+      currentRosTime(0, 0, RCL_ROS_TIME),
       cmPeriod(0, 0)
 {
     bodyItem_ = nullptr;
     isConfiguread = false;
+#ifndef ROS_DISTRO_HUMBLE
+    cmClockHandle = nullptr;
+    isClockOverrideEnabled = false;
+#endif
     io_ = nullptr;
 }
 
@@ -107,6 +117,15 @@ void ROS2ControlItem::onTargetBodyItemChanged(BodyItem* bodyItem)
             
     auto options = controller_manager::get_cm_node_options();
     options.parameter_overrides().emplace_back("use_sim_time", true);
+#ifndef ROS_DISTRO_HUMBLE
+    // Detach the ControllerManager's clock from the /clock topic so that
+    // the simulation time can be injected directly via rcl_set_ros_time_override.
+    // Without this, the /clock topic would asynchronously overwrite the injected time.
+    options.arguments({
+        "--ros-args",
+        "-r", "/clock:=/__choreonoid_unused_clock"
+    });
+#endif
     controllerManager = std::make_shared<controller_manager::ControllerManager>(
         std::move(resourceManager),
         executor,
@@ -122,6 +141,11 @@ void ROS2ControlItem::onTargetBodyItemChanged(BodyItem* bodyItem)
     }
 
     executor->add_node(controllerManager);
+
+#ifndef ROS_DISTRO_HUMBLE
+    cmClockHandle = controllerManager->get_clock()->get_clock_handle();
+    isClockOverrideEnabled = false;
+#endif
 
     isConfiguread = true;
 }
@@ -237,11 +261,13 @@ bool ROS2ControlItem::start()
 }
 
 
-rclcpp::Time ROS2ControlItem::getCurrentRosTime()
+void ROS2ControlItem::input()
 {
+    // Update the cached ROS time at the beginning of the simulation step.
+    // The same value is reused by control() and output() in the same step.
     double time = io_->currentTime();
 
-#ifndef ROS_DISTRO_HUMBLE    
+#ifndef ROS_DISTRO_HUMBLE
     // Avoid zero time to prevent controller_manager error in Jazzy
     // when clock check fails at the first control cycle
     if (time < 1e-9) {
@@ -249,15 +275,30 @@ rclcpp::Time ROS2ControlItem::getCurrentRosTime()
     }
 #endif
 
-    int32_t sec = static_cast<int32_t>(time);
-    uint32_t nsec = static_cast<uint32_t>(std::round((time - sec) * 1e9));
-    return rclcpp::Time(sec, nsec, RCL_ROS_TIME);
-}
+    int64_t nsec_total = static_cast<int64_t>(std::llround(time * 1e9));
+    int32_t sec = static_cast<int32_t>(nsec_total / 1000000000LL);
+    uint32_t nsec = static_cast<uint32_t>(nsec_total % 1000000000LL);
+    currentRosTime = rclcpp::Time(sec, nsec, RCL_ROS_TIME);
 
+#ifndef ROS_DISTRO_HUMBLE
+    // In Jazzy and later, ControllerManager::update ignores its time argument
+    // and instead uses its own node clock. Inject the simulation time into
+    // that clock via the rcl ROS time override mechanism so that controllers
+    // receive the simulation time in lockstep with read/update/write calls.
+    if(cmClockHandle){
+        auto cmClock = controllerManager->get_clock();
+        std::lock_guard<std::mutex> clockLock(cmClock->get_clock_mutex());
+        if(!isClockOverrideEnabled){
+            if(rcl_enable_ros_time_override(cmClockHandle) == RCL_RET_OK){
+                isClockOverrideEnabled = true;
+            }
+        }
+        rcl_ret_t ret = rcl_set_ros_time_override(cmClockHandle, nsec_total);
+        (void)ret;
+    }
+#endif
 
-void ROS2ControlItem::input()
-{
-    controllerManager->read(getCurrentRosTime(), cmPeriod);
+    controllerManager->read(currentRosTime, cmPeriod);
 }
 
 
@@ -265,7 +306,7 @@ bool ROS2ControlItem::control()
 {
     // TODO: apply update_rate param of controllerManager
     try {
-        controllerManager->update(getCurrentRosTime(), cmPeriod);
+        controllerManager->update(currentRosTime, cmPeriod);
     }
     catch(const std::runtime_error& error){
         io_->mout()->putErrorln(error.what());
@@ -277,7 +318,7 @@ bool ROS2ControlItem::control()
 
 void ROS2ControlItem::output()
 {
-    controllerManager->write(getCurrentRosTime(), cmPeriod);
+    controllerManager->write(currentRosTime, cmPeriod);
 }
 
 
@@ -302,6 +343,10 @@ void ROS2ControlItem::finalize()
         }
         executor.reset();
     }
+#ifndef ROS_DISTRO_HUMBLE
+    cmClockHandle = nullptr;
+    isClockOverrideEnabled = false;
+#endif
     isConfiguread = false;
     io_ = nullptr;
 }

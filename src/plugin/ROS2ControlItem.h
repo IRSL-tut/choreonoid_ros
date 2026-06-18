@@ -4,6 +4,7 @@
 #include <cnoid/ControllerItem>
 #include <controller_manager/controller_manager.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rcl/time.h>
 
 namespace cnoid {
 
@@ -42,14 +43,18 @@ private:
     std::thread executorThread;
     std::shared_ptr<controller_manager::ControllerManager> controllerManager;
     bool isConfiguread;
+#ifndef ROS_DISTRO_HUMBLE
+    rcl_clock_t* cmClockHandle;
+    bool isClockOverrideEnabled;
+#endif
 
     ControllerIO* io_;
+    rclcpp::Time currentRosTime;
     rclcpp::Duration cmPeriod;
 
     std::unique_ptr<hardware_interface::ResourceManager> createResourceManager();
     void finalize();
     std::string getURDF() const;
-    rclcpp::Time getCurrentRosTime();
 };
 
 typedef ref_ptr<ROS2ControlItem> ROS2ControlItemPtr;
